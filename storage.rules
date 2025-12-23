@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Issues images - anyone can create, only admins can delete
+    match /issues/{imageId} {
+      allow read: if true;
+      allow create: if request.resource.size < 5 * 1024 * 1024 && 
+                       request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && 
+                       firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Default deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

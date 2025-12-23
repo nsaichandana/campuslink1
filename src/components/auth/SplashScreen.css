@@ -1,0 +1,65 @@
+.splash-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #faf9f7 0%, #f0ede8 100%);
+  padding: var(--spacing-lg);
+}
+
+.splash-content {
+  text-align: center;
+  max-width: 440px;
+  width: 100%;
+}
+
+.splash-logo {
+  display: inline-flex;
+  margin-bottom: var(--spacing-xl);
+  color: var(--color-primary);
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.splash-title {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: var(--spacing-md);
+  letter-spacing: -0.02em;
+}
+
+.splash-tagline {
+  font-size: 1.125rem;
+  color: var(--color-text-light);
+  margin-bottom: var(--spacing-2xl);
+  line-height: 1.6;
+  font-family: var(--font-serif);
+}
+
+.splash-cta {
+  font-size: 1.0625rem;
+  padding: 1rem 2rem;
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.splash-footer {
+  font-size: 0.875rem;
+  color: var(--color-text-lighter);
+  margin-top: var(--spacing-lg);
+}
+
+@media (max-width: 768px) {
+  .splash-title {
+    font-size: 2.5rem;
+  }
+  
+  .splash-tagline {
+    font-size: 1rem;
+  }
+}

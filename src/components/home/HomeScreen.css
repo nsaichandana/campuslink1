@@ -1,0 +1,136 @@
+.home-screen {
+  min-height: 100vh;
+  background-color: var(--color-bg);
+}
+
+.home-header {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--spacing-lg) 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+  background-color: rgba(255, 255, 255, 0.95);
+}
+
+.home-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.home-title {
+  font-size: 1.5rem;
+  margin: 0;
+  color: var(--color-primary);
+}
+
+.home-user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.user-greeting {
+  font-size: 0.9375rem;
+  color: var(--color-text);
+}
+
+.home-main {
+  padding: var(--spacing-2xl) 0;
+}
+
+.home-alert {
+  margin-bottom: var(--spacing-xl);
+}
+
+.home-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-2xl);
+}
+
+.home-card {
+  position: relative;
+  text-align: center;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-card-locked {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.home-card-locked:hover {
+  transform: none;
+  border-color: var(--color-border);
+}
+
+.home-card-icon {
+  font-size: 3rem;
+  margin-bottom: var(--spacing-md);
+  animation: float 3s ease-in-out infinite;
+}
+
+.home-card:nth-child(2) .home-card-icon {
+  animation-delay: 0.5s;
+}
+
+.home-card:nth-child(3) .home-card-icon {
+  animation-delay: 1s;
+}
+
+.home-card-title {
+  font-size: 1.375rem;
+  margin-bottom: var(--spacing-sm);
+}
+
+.home-card-description {
+  color: var(--color-text-light);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.home-card-lock {
+  margin-top: var(--spacing-md);
+}
+
+.home-tagline {
+  text-align: center;
+  padding: var(--spacing-2xl) 0;
+}
+
+.home-tagline p {
+  font-family: var(--font-serif);
+  font-size: 1.125rem;
+  color: var(--color-text-light);
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .home-header-content {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    text-align: center;
+  }
+  
+  .home-user-info {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+  
+  .home-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .home-card {
+    min-height: 200px;
+  }
+}

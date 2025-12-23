@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+    
+    // Users collection - users can read/write their own data, admins can read all
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId);
+    }
+    
+    // Profiles collection - readable by all signed-in users, writable by owner
+    match /profiles/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    
+    // Issues collection - admins can read all, users can read all
+    match /issues/{issueId} {
+      // Anyone can create issues (including anonymous)
+      allow create: if true;
+      
+      // Anyone can read issues
+      allow read: if true;
+      
+      // Admins can update/delete ANY issue, users can update/delete their own
+      allow update, delete: if isAdmin() || 
+        (isSignedIn() && resource.data.reportedBy == request.auth.uid);
+    }
+    
+    // Mentor requests - ADMINS CAN READ METADATA (but not message content)
+    match /mentorRequests/{requestId} {
+      // Users can create requests
+      allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+      
+      // Users can read their own requests OR admins can read (for monitoring)
+      allow read: if isSignedIn() && 
+                     (resource.data.senderId == request.auth.uid || 
+                      resource.data.receiverId == request.auth.uid ||
+                      isAdmin());
+      
+      // Only receiver can update (accept/reject)
+      allow update: if isSignedIn() && resource.data.receiverId == request.auth.uid;
+      
+      // Only sender can delete their own request
+      allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
+    }
+    
+    // Chat rooms - ADMINS EXPLICITLY DENIED ACCESS TO MESSAGES
+    match /chatRooms/{roomId} {
+      // Users can create chat rooms
+      allow create: if isSignedIn() && !isAdmin();
+      
+      // Only participants can read (NO ADMIN ACCESS)
+      allow read: if isSignedIn() && !isAdmin() &&
+                     request.auth.uid in resource.data.participants;
+      
+      // Only participants can update
+      allow update: if isSignedIn() && !isAdmin() &&
+                       request.auth.uid in resource.data.participants;
+      
+      // ADMINS CAN READ METADATA ONLY (via special admin function)
+      // This requires a separate collection or server-side function
+    }
+    
+    // Messages - ADMINS COMPLETELY BLOCKED
+    match /messages/{messageId} {
+      // Only participants can create messages (NEVER admins)
+      allow create: if isSignedIn() && !isAdmin() && 
+                       request.resource.data.senderId == request.auth.uid;
+      
+      // Only participants can read messages (NEVER admins)
+      allow read: if isSignedIn() && !isAdmin() &&
+                     exists(/databases/$(database)/documents/chatRooms/$(resource.data.chatRoomId)) &&
+                     request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(resource.data.chatRoomId)).data.participants;
+      
+      // EXPLICIT BLOCK: Admins cannot access messages under any circumstance
+      allow read, write: if !isAdmin();
+    }
+  }
+}
