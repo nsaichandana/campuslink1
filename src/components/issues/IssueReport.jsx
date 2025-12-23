@@ -24,12 +24,24 @@ export default function IssueReport() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      console.log('[Image] Selected file:', file.name, file.size, 'bytes');
+      
       if (file.size > 5 * 1024 * 1024) {
         setError('Image must be less than 5MB');
+        console.error('[Image] File too large:', file.size);
         return;
       }
+      
+      if (!file.type.startsWith('image/')) {
+        setError('Please select an image file');
+        console.error('[Image] Invalid file type:', file.type);
+        return;
+      }
+      
       setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
+      const preview = URL.createObjectURL(file);
+      setImagePreview(preview);
+      console.log('[Image] ✅ Preview created');
     }
   };
 
@@ -43,7 +55,10 @@ export default function IssueReport() {
         throw new Error('Description must be 300 characters or less');
       }
 
-      await createIssue(
+      console.log('[IssueReport] Submitting issue...');
+      console.log('[IssueReport] Has image:', !!imageFile);
+      
+      const result = await createIssue(
         {
           category: formData.category,
           description: formData.description,
@@ -53,11 +68,19 @@ export default function IssueReport() {
         imageFile
       );
 
+      console.log('[IssueReport] ✅ Issue created:', result.id);
+      if (result.imageUrl) {
+        console.log('[IssueReport] ✅ Image URL:', result.imageUrl);
+      } else if (imageFile) {
+        console.warn('[IssueReport] ⚠️ Image was selected but not uploaded');
+      }
+
       setSuccess(true);
       setTimeout(() => {
         navigate('/activity');
       }, 2000);
     } catch (err) {
+      console.error('[IssueReport] ❌ Error:', err);
       setError(err.message);
     } finally {
       setLoading(false);

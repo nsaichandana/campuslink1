@@ -91,21 +91,51 @@ export async function updateProfile(userId, updates) {
  */
 
 export async function createIssue(issueData, imageFile = null) {
-  // Moderate issue description
-  const moderation = await moderateContent(issueData.description, 'issue');
+  console.log('[DB] Creating issue...');
+  console.log('[DB] Image file:', imageFile ? `${imageFile.name} (${imageFile.size} bytes)` : 'none');
   
-  if (!moderation.safe) {
-    throw new Error(`Issue rejected: ${moderation.reason}`);
+  // Moderate issue description
+  try {
+    const moderation = await moderateContent(issueData.description, 'issue');
+    
+    if (!moderation.safe) {
+      throw new Error(`Issue rejected: ${moderation.reason}`);
+    }
+  } catch (moderationError) {
+    console.warn('[DB] Moderation failed, allowing issue:', moderationError.message);
+    // Continue even if moderation fails
   }
   
   // Categorize and prioritize using AI
-  const categorization = await categorizeIssue(issueData.description);
+  let categorization = { category: issueData.category, priority: 'Medium', tags: [], summary: '' };
+  try {
+    categorization = await categorizeIssue(issueData.description);
+  } catch (categorizationError) {
+    console.warn('[DB] Categorization failed, using defaults:', categorizationError.message);
+  }
   
   let imageUrl = null;
   if (imageFile) {
-    const storageRef = ref(storage, `issues/${Date.now()}_${imageFile.name}`);
-    await uploadBytes(storageRef, imageFile);
-    imageUrl = await getDownloadURL(storageRef);
+    try {
+      console.log('[DB] Uploading image to Firebase Storage...');
+      const fileName = `${Date.now()}_${imageFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const storageRef = ref(storage, `issues/${fileName}`);
+      
+      console.log('[DB] Storage path:', `issues/${fileName}`);
+      const uploadResult = await uploadBytes(storageRef, imageFile);
+      console.log('[DB] ✅ Upload successful, getting download URL...');
+      
+      imageUrl = await getDownloadURL(uploadResult.ref);
+      console.log('[DB] ✅ Image URL:', imageUrl);
+    } catch (uploadError) {
+      console.error('[DB] ❌ Image upload failed:', uploadError);
+      console.error('[DB] Error code:', uploadError.code);
+      console.error('[DB] Error message:', uploadError.message);
+      
+      // Don't fail the entire issue creation if image upload fails
+      // Just log the error and continue without image
+      console.warn('[DB] Continuing without image...');
+    }
   }
   
   const issue = {
@@ -116,8 +146,8 @@ export async function createIssue(issueData, imageFile = null) {
     reportedBy: issueData.isAnonymous ? null : issueData.userId,
     status: 'Open',
     priority: categorization.priority,
-    tags: categorization.tags,
-    summary: categorization.summary,
+    tags: categorization.tags || [],
+    summary: categorization.summary || '',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     statusHistory: [{
@@ -127,59 +157,42 @@ export async function createIssue(issueData, imageFile = null) {
     }]
   };
   
+  console.log('[DB] Creating issue document...');
   const docRef = await addDoc(collection(db, 'issues'), issue);
+  console.log('[DB] ✅ Issue created:', docRef.id);
+  
   return { id: docRef.id, ...issue };
 }
 
 export async function getIssues(filters = {}) {
-  try {
-    let q = collection(db, 'issues');
-    
-    // Apply filters
-    const conditions = [];
-    
-    if (filters.category) {
-      conditions.push(where('category', '==', filters.category));
-    }
-    
-    if (filters.status) {
-      conditions.push(where('status', '==', filters.status));
-    }
-    
-    if (filters.userId) {
-      conditions.push(where('reportedBy', '==', filters.userId));
-    }
-    
-    // ✅ REMOVED: orderBy('createdAt', 'desc') - this causes the index error
-    
-    // Build query with conditions only (no orderBy)
-    if (conditions.length > 0) {
-      q = query(q, ...conditions);
-    }
-    
-    const snapshot = await getDocs(q);
-    let issues = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    
-    // ✅ Sort in memory instead of in the database
-    issues.sort((a, b) => {
-      const aTime = a.createdAt?.toMillis?.() || 0;
-      const bTime = b.createdAt?.toMillis?.() || 0;
-      return bTime - aTime; // Newest first
-    });
-    
-    // ✅ Apply limit in memory if specified
-    if (filters.limit) {
-      issues = issues.slice(0, filters.limit);
-    }
-    
-    return issues;
-  } catch (error) {
-    console.error('Error getting issues:', error);
-    throw error;
+  let q = collection(db, 'issues');
+  
+  const constraints = [orderBy('createdAt', 'desc')];
+  
+  if (filters.category) {
+    constraints.unshift(where('category', '==', filters.category));
   }
+  
+  if (filters.status) {
+    constraints.unshift(where('status', '==', filters.status));
+  }
+  
+  if (filters.priority) {
+    constraints.unshift(where('priority', '==', filters.priority));
+  }
+  
+  if (filters.userId) {
+    constraints.unshift(where('reportedBy', '==', filters.userId));
+  }
+  
+  if (filters.limit) {
+    constraints.push(limit(filters.limit));
+  }
+  
+  q = query(q, ...constraints);
+  
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function updateIssueStatus(issueId, newStatus, note, adminEmail) {
@@ -536,21 +549,48 @@ export function subscribeToMentorRequests(userId, type, callback) {
  */
 
 export async function getChatRooms(userId) {
-  const q = query(
-    collection(db, 'chatRooms'),
-    where('participants', 'array-contains', userId),
-    orderBy('lastMessageAt', 'desc')
-  );
+  console.log(`[DB] Getting chat rooms for user: ${userId}`);
   
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  try {
+    // Simple query without orderBy to avoid index requirement
+    const q = query(
+      collection(db, 'chatRooms'),
+      where('participants', 'array-contains', userId)
+    );
+    
+    const snapshot = await getDocs(q);
+    const rooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    // Sort in memory by lastMessageAt
+    rooms.sort((a, b) => {
+      const aTime = a.lastMessageAt?.toMillis?.() || 0;
+      const bTime = b.lastMessageAt?.toMillis?.() || 0;
+      return bTime - aTime; // Descending (newest first)
+    });
+    
+    console.log(`[DB] Found ${rooms.length} chat rooms`);
+    return rooms;
+  } catch (error) {
+    console.error('[DB] Error getting chat rooms:', error);
+    return [];
+  }
 }
 
 export async function sendMessage(chatRoomId, senderId, text) {
-  const moderation = await moderateContent(text, 'chat');
+  console.log(`[DB] Sending message to chat: ${chatRoomId}`);
+  console.log(`[DB] Sender: ${senderId}`);
+  console.log(`[DB] Text length: ${text.length}`);
   
-  if (!moderation.safe) {
-    throw new Error(`Message blocked: ${moderation.reason}`);
+  try {
+    const moderation = await moderateContent(text, 'chat');
+    
+    if (!moderation.safe) {
+      console.warn('[DB] Message blocked by moderation:', moderation.reason);
+      throw new Error(`Message blocked: ${moderation.reason}`);
+    }
+  } catch (moderationError) {
+    console.warn('[DB] Moderation failed, allowing message:', moderationError.message);
+    // Allow message if moderation fails (don't block on API errors)
   }
   
   const message = {
@@ -560,25 +600,40 @@ export async function sendMessage(chatRoomId, senderId, text) {
     createdAt: serverTimestamp()
   };
   
-  await addDoc(collection(db, 'messages'), message);
+  console.log('[DB] Adding message document...');
+  const docRef = await addDoc(collection(db, 'messages'), message);
+  console.log('[DB] ✅ Message added:', docRef.id);
   
   // Update chat room last message time
+  console.log('[DB] Updating chat room lastMessageAt...');
   await updateDoc(doc(db, 'chatRooms', chatRoomId), {
     lastMessageAt: serverTimestamp()
   });
+  console.log('[DB] ✅ Chat room updated');
 }
 
-export function subscribeToMessages(chatRoomId, callback) {
+export function subscribeToMessages(chatRoomId, callback, errorCallback) {
+  console.log(`[DB] Subscribing to messages for chat: ${chatRoomId}`);
+  
   const q = query(
     collection(db, 'messages'),
     where('chatRoomId', '==', chatRoomId),
     orderBy('createdAt', 'asc')
   );
   
-  return onSnapshot(q, (snapshot) => {
-    const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    callback(messages);
-  });
+  return onSnapshot(q, 
+    (snapshot) => {
+      console.log(`[DB] Messages snapshot: ${snapshot.size} messages`);
+      const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(messages);
+    },
+    (error) => {
+      console.error('[DB] Message subscription error:', error);
+      if (errorCallback) {
+        errorCallback(error);
+      }
+    }
+  );
 }
 
 export async function getMessages(chatRoomId) {

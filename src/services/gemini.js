@@ -9,7 +9,7 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
  */
 export async function moderateContent(text, type = 'general') {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     
     const prompt = `You are a content moderation system for a college campus app. 
     Analyze this ${type} content for:
@@ -54,7 +54,7 @@ export async function moderateContent(text, type = 'general') {
  */
 export async function categorizeIssue(description) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     
     const prompt = `You are an AI assistant for a college campus issue reporting system.
     Analyze this issue and categorize it:
@@ -105,7 +105,7 @@ export async function categorizeIssue(description) {
  */
 export async function calculateMentorMatch(mentorSkills, learnerNeeds, mentorBio, learnerBio) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     
     const prompt = `You are a mentor matching system for college students.
     
@@ -164,7 +164,7 @@ export async function calculateMentorMatch(mentorSkills, learnerNeeds, mentorBio
  */
 export async function parseSearchQuery(query) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     
     const prompt = `Extract skills and interests from this search query: "${query}"
     

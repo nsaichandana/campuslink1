@@ -8,7 +8,7 @@ import './ChatScreen.css';
 export default function ChatScreen() {
   const { chatId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -18,16 +18,39 @@ export default function ChatScreen() {
   
   const messagesEndRef = useRef(null);
 
+  // Block admin access
   useEffect(() => {
+    if (isAdmin) {
+      alert('Admins cannot access private chats');
+      navigate('/admin');
+    }
+  }, [isAdmin, navigate]);
+
+  useEffect(() => {
+    if (!user || !chatId) {
+      console.error('Missing user or chatId');
+      return;
+    }
+
+    console.log(`[Chat] Subscribing to messages for chat: ${chatId}`);
+    
     // Subscribe to real-time messages
     const unsubscribe = subscribeToMessages(chatId, (msgs) => {
+      console.log(`[Chat] Received ${msgs.length} messages`);
       setMessages(msgs);
       setLoading(false);
       scrollToBottom();
+    }, (error) => {
+      console.error('[Chat] Subscription error:', error);
+      setError('Failed to load messages: ' + error.message);
+      setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [chatId]);
+    return () => {
+      console.log(`[Chat] Unsubscribing from chat: ${chatId}`);
+      unsubscribe();
+    };
+  }, [chatId, user]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -41,10 +64,22 @@ export default function ChatScreen() {
     setError('');
 
     try {
+      console.log('[Chat] Sending message...');
       await sendMessage(chatId, user.uid, newMessage.trim());
+      console.log('[Chat] ✅ Message sent successfully');
       setNewMessage('');
     } catch (err) {
+      console.error('[Chat] ❌ Send error:', err);
       setError(err.message);
+      
+      // Show user-friendly error messages
+      if (err.code === 'permission-denied') {
+        setError('You do not have permission to send messages in this chat.');
+      } else if (err.message.includes('Index')) {
+        setError('Database index required. Please wait a few minutes and try again.');
+      } else {
+        setError('Failed to send message: ' + err.message);
+      }
     } finally {
       setSending(false);
     }
